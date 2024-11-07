@@ -1,0 +1,28 @@
+﻿@model IEnumerable<RootDirectory>
+
+<div class="container mt-4">
+    <h2>Root Directories on @ViewBag.Server.Name</h2>
+
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "FilePortal")">Servers</a>
+            </li>
+            <li class="breadcrumb-item active">@ViewBag.Server.Name</li>
+        </ol>
+    </nav>
+
+    <div class="list-group">
+        @foreach (var root in Model)
+        {
+            <a href="@Url.Action("Browse", "FilePortal", new { serverId = ViewBag.Server.Id, rootName = root.Name })"
+               class="list-group-item list-group-item-action">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="bi bi-folder"></i> @root.Name
+                    </div>
+                </div>
+            </a>
+        }
+    </div>
+</div>

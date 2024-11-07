@@ -1,0 +1,144 @@
+﻿@model IEnumerable<FileItem>
+
+<div class="container mt-4">
+    <h2>Directory Contents on @ViewBag.Server.Name</h2>
+
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "FilePortal")">Servers</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Browse", "FilePortal", new { serverId = ViewBag.Server.Id })">@ViewBag.Server.Name</a>
+            </li>
+            @if (!string.IsNullOrEmpty(ViewBag.RootName))
+            {
+                <li class="breadcrumb-item">
+                    <a href="@Url.Action("Browse", "FilePortal", new { serverId = ViewBag.Server.Id, rootName = ViewBag.RootName })">
+                        @ViewBag.RootName
+                    </a>
+                </li>
+
+                @if (!string.IsNullOrEmpty(ViewBag.Path))
+                {
+                    var pathParts = ViewBag.Path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                    var currentPath = "";
+                    foreach (var part in pathParts)
+                    {
+                        currentPath = string.IsNullOrEmpty(currentPath) ? part : $"{currentPath}/{part}";
+                        <li class="breadcrumb-item">
+                            <a href="@Url.Action("Browse", "FilePortal", new { serverId = ViewBag.Server.Id, rootName = ViewBag.RootName, path = currentPath })">
+                                @part
+                            </a>
+                        </li>
+                    }
+                }
+            }
+        </ol>
+    </nav>
+
+    <div class="list-group">
+        @foreach (var item in Model)
+        {
+            @if (item.IsDirectory)
+            {
+                <a href="@Url.Action("Browse", "FilePortal", new { serverId = ViewBag.Server.Id, rootName = item.RootName, path = item.Path })"
+                   class="list-group-item list-group-item-action">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-folder"></i> @item.Name
+                        </div>
+                    </div>
+                </a>
+            }
+            else
+            {
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="file-item"
+                             data-server-id="@ViewBag.Server.Id"
+                             data-root="@item.RootName"
+                             data-path="@item.Path"
+                             style="cursor: pointer;">
+                            <i class="bi bi-file-text"></i> @item.Name
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    <!-- Modal for file contents -->
+    <div class="modal fade" id="fileContentsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">File Contents</h5>
+                    <div class="ms-auto">
+                        <small class="text-muted me-3" id="fileInfo"></small>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                </div>
+                <div class="modal-body">
+                    <div id="fileError" class="alert alert-danger d-none"></div>
+                    <pre id="fileContents" class="overflow-auto" style="max-height: 70vh;"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        document.querySelectorAll('.file-item').forEach(item => {
+            item.addEventListener('click', async (e) => {
+                const element = e.currentTarget;
+                const serverId = element.dataset.serverId;
+                const rootName = element.dataset.root;
+                const path = element.dataset.path;
+                const fileName = element.querySelector('i').nextSibling.textContent.trim();
+
+                // Show modal with loading state
+                const modal = new bootstrap.Modal(document.getElementById('fileContentsModal'));
+                const fileContents = document.getElementById('fileContents');
+                const fileError = document.getElementById('fileError');
+                const fileInfo = document.getElementById('fileInfo');
+
+                fileContents.textContent = 'Loading...';
+                fileError.classList.add('d-none');
+                fileInfo.textContent = '';
+                modal.show();
+
+                try {
+                    const response = await fetch(
+                        `/LogViewer/FilePortal/GetFileContents?serverId=${encodeURIComponent(serverId)}&rootName=${encodeURIComponent(rootName)}&path=${encodeURIComponent(path)}`
+                    );
+                    const data = await response.json();
+
+                    if (data.success) {
+                        fileContents.textContent = data.contents;
+                        fileError.classList.add('d-none');
+                        fileInfo.textContent = `${formatFileSize(data.fileSizeBytes)} | ${data.encoding}`;
+                    } else {
+                        fileContents.textContent = '';
+                        fileError.textContent = data.message;
+                        fileError.classList.remove('d-none');
+                        fileInfo.textContent = data.fileSizeBytes ? formatFileSize(data.fileSizeBytes) : '';
+                    }
+                } catch (error) {
+                    fileContents.textContent = '';
+                    fileError.textContent = 'Error loading file contents';
+                    fileError.classList.remove('d-none');
+                }
+            });
+        });
+    </script>
+}
