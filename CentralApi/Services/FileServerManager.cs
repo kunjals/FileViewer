@@ -74,7 +74,7 @@ namespace CentralApi.Services
                 $"api/FileApi/file?rootName={Uri.EscapeDataString(rootName)}&path={Uri.EscapeDataString(path)}");
         }
 
-        public async Task<FileSearchResponse> Search(FileSearchRequest request)
+        public async Task<FileSearchResponse> SearchFiles(FileSearchRequest request)
         {
             var server = await GetServerById(request.ServerId);
             if (server == null)

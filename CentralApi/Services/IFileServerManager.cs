@@ -9,6 +9,6 @@ namespace CentralApi.Services
         Task<FileServerResponse<IEnumerable<FileItem>>> Browse(string serverId, string rootName, string path);
         Task<FileServerResponse<FileReadResult>> GetFileContents(string serverId, string rootName, string path);
         Task<bool> CheckServerHealth(string serverId);
-        Task<FileSearchResponse> Search(FileSearchRequest request);
+        Task<FileSearchResponse> SearchFiles(FileSearchRequest request);
     }
 }

@@ -38,6 +38,9 @@ namespace CentralApi.Controllers
             try
             {
                 var user = await _userManager.FindByNameAsync(request.Username);
+
+                UpdateUserDetails(user);
+
                 if (user == null)
                 {
                     return Unauthorized(new AuthResponse
@@ -99,6 +102,15 @@ namespace CentralApi.Controllers
                     Error = "An error occurred during login"
                 });
             }
+        }
+
+        private void UpdateUserDetails(ApplicationUser? user)
+        {
+            user.FirstName = "Kunjal";
+            user.LastName = "Shah";
+            user.LastLoginAt = DateTime.UtcNow;
+
+            _userManager.UpdateAsync(user);
         }
 
         //[HttpPost]

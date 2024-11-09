@@ -7,5 +7,6 @@ namespace FileViewerAgent.Services
         IEnumerable<RootDirectory> GetRootDirectories();
         IEnumerable<FileItem> GetDirectoryContents(string rootName, string path);
         FileReadResult ReadFileContents(string rootName, string path);
+        Task<FileSearchResponse> SearchFilesAsync(FileSearchRequest request);
     }
 }

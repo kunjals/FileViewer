@@ -1,5 +1,7 @@
 ﻿using FileViewer.Models;
+using System.Collections.Concurrent;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace FileViewerAgent.Services
 {
@@ -8,12 +10,19 @@ namespace FileViewerAgent.Services
         private readonly Dictionary<string, string> _rootPaths;
         private readonly string[] _allowedExtensions = { ".log", ".txt" };
         private readonly int _maxFileSizeInMB = 10; // Maximum file size to read
+        private readonly ILogger<FileService> _logger;
+        private readonly ParallelOptions _parallelOptions;
 
-        public FileService(IConfiguration configuration)
+        public FileService(IConfiguration configuration, ILogger<FileService> logger)
         {
+            _logger = logger;
             var rootSection = configuration.GetSection("FileSettings:RootPaths");
             _rootPaths = rootSection.Get<Dictionary<string, string>>()
                 ?? throw new ArgumentNullException("RootPaths configuration is missing");
+            _parallelOptions = new ParallelOptions
+            {
+                MaxDegreeOfParallelism = Environment.ProcessorCount // Use all available cores
+            };
         }
 
         public IEnumerable<RootDirectory> GetRootDirectories()
@@ -141,6 +150,177 @@ namespace FileViewerAgent.Services
                     FileSizeBytes = fileInfo.Length
                 };
             }
+        }
+
+        public async Task<FileSearchResponse> SearchFilesAsync(FileSearchRequest request)
+        {
+            try
+            {
+                if (!_rootPaths.TryGetValue(request.RootName, out var rootPath))
+                {
+                    throw new ArgumentException($"Invalid root directory: {request.RootName}");
+                }
+
+                var searchPath = string.IsNullOrEmpty(request.Path) ?
+                    rootPath :
+                    Path.Combine(rootPath, request.Path);
+
+                if (!Directory.Exists(searchPath))
+                {
+                    throw new DirectoryNotFoundException($"Directory not found: {searchPath}");
+                }
+
+                var searchResults = new ConcurrentBag<FileSearchResult>();
+                var searchPattern = GetSearchPattern(request.SearchType, request.SearchTerm);
+
+                // Get all matching files
+                var files = Directory.GetFiles(searchPath, "*.*", SearchOption.AllDirectories)
+                    .Where(f => _allowedExtensions.Contains(Path.GetExtension(f).ToLower()))
+                    .ToList();
+
+                // Process files in parallel
+                await Parallel.ForEachAsync(files, _parallelOptions, async (file, token) =>
+                {
+                    var result = await SearchFileAsync(file, searchPath, searchPattern);
+                    if (result != null)
+                    {
+                        searchResults.Add(result);
+                    }
+                });
+
+                return new FileSearchResponse
+                {
+                    Success = true,
+                    Results = searchResults.OrderBy(r => r.FilePath).ToList()
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching files with pattern {SearchTerm}", request.SearchTerm);
+                return new FileSearchResponse
+                {
+                    Success = false,
+                    Error = ex.Message
+                };
+            }
+        }
+
+        private async Task<FileSearchResult> SearchFileAsync(string file, string basePath, Regex searchPattern)
+        {
+            try
+            {
+                var fileInfo = new FileInfo(file);
+                if (fileInfo.Length > 10 * 1024 * 1024) // Skip files larger than 10MB
+                {
+                    _logger.LogWarning("Skipping large file: {FilePath}", file);
+                    return null;
+                }
+
+                // Read file in chunks for better memory usage
+                using var fileStream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, true);
+                using var streamReader = new StreamReader(fileStream);
+
+                string line;
+                int lineNumber = 0;
+                var buffer = new char[4096];
+                var currentLine = new StringBuilder();
+                var resultLine = string.Empty;
+                var matchLineNumber = 0;
+
+                while (true)
+                {
+                    var bytesRead = await streamReader.ReadAsync(buffer, 0, buffer.Length);
+                    if (bytesRead == 0) break;
+
+                    for (int i = 0; i < bytesRead; i++)
+                    {
+                        if (buffer[i] == '\n')
+                        {
+                            lineNumber++;
+                            line = currentLine.ToString().TrimEnd('\r');
+                            var match = searchPattern.Match(line);
+
+                            if (match.Success)
+                            {
+                                resultLine = line;
+                                matchLineNumber = lineNumber;
+                                break;
+                            }
+
+                            currentLine.Clear();
+                        }
+                        else
+                        {
+                            currentLine.Append(buffer[i]);
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(resultLine))
+                        break;
+                }
+
+                if (!string.IsNullOrEmpty(resultLine))
+                {
+                    var relativePath = Path.GetRelativePath(basePath, file);
+
+                    // Get context around the match
+                    var match = searchPattern.Match(resultLine);
+                    var startIndex = Math.Max(0, match.Index - 50);
+                    var length = Math.Min(resultLine.Length - startIndex, 100);
+                    var context = resultLine.Substring(startIndex, length);
+
+                    if (startIndex > 0)
+                        context = "..." + context;
+                    if (startIndex + length < resultLine.Length)
+                        context = context + "...";
+
+                    return new FileSearchResult
+                    {
+                        FilePath = relativePath.Replace('\\', '/'),
+                        FileName = Path.GetFileName(file),
+                        LastModified = fileInfo.LastWriteTimeUtc,
+                        LineNumber = matchLineNumber,
+                        MatchedContent = context
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching file: {FilePath}", file);
+            }
+
+            return null;
+        }
+
+        private Regex GetSearchPattern(SearchType searchType, string searchTerm)
+        {
+            var pattern = searchType switch
+            {
+                SearchType.MobileNumber => FormatMobileNumberPattern(searchTerm),
+                SearchType.CustomerId => Regex.Escape(searchTerm),
+                SearchType.UniqueId => Regex.Escape(searchTerm),
+                _ => throw new ArgumentException($"Invalid search type: {searchType}")
+            };
+
+            return new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        }
+
+        private string FormatMobileNumberPattern(string mobileNumber)
+        {
+            // Remove any non-digit characters from the search term
+            var cleanNumber = new string(mobileNumber.Where(char.IsDigit).ToArray());
+
+            if (string.IsNullOrEmpty(cleanNumber))
+                throw new ArgumentException("Invalid mobile number format");
+
+            // Create a pattern that matches different mobile number formats
+            // For example: "1234567890" should match:
+            // 1234567890
+            // 123-456-7890
+            // (123) 456-7890
+            // +1 123.456.7890
+            // etc.
+            return $@"[^0-9]*{string.Join(@"[^0-9]*", cleanNumber.ToCharArray())}[^0-9]*";
         }
 
         private Encoding DetectFileEncoding(string filePath)

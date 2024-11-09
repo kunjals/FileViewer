@@ -171,5 +171,20 @@ namespace FileViewerPortal.Controllers
                 Message = "An error occurred while processing your request"
             });
         }
+
+        [HttpPost]
+        public async Task<IActionResult> Search([FromBody] FileSearchRequest request)
+        {
+            try
+            {
+                var response = await _centralApiService.SearchFiles(request);
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error performing file search");
+                return StatusCode(500, new { success = false, error = "Error performing search" });
+            }
+        }
     }
 }

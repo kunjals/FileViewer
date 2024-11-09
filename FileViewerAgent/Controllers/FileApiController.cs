@@ -65,5 +65,24 @@ namespace FileViewerAgent.Controllers
         {
             return Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
         }
+
+        [HttpPost("search")]
+        public async Task<ActionResult<FileSearchResponse>> Search([FromBody] FileSearchRequest request)
+        {
+            try
+            {
+                var result = await _fileService.SearchFilesAsync(request);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching files");
+                return StatusCode(500, new FileSearchResponse
+                {
+                    Success = false,
+                    Error = "Error searching files"
+                });
+            }
+        }
     }
 }

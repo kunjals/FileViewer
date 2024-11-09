@@ -37,7 +37,37 @@
         </ol>
     </nav>
 
-    <div class="list-group">
+    <!-- Search Form -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form id="searchForm" class="row g-3">
+                <input type="hidden" id="serverId" value="@ViewBag.Server.Id" />
+                <input type="hidden" id="rootName" value="@ViewBag.RootName" />
+                <input type="hidden" id="currentPath" value="@ViewBag.Path" />
+
+                <div class="col-md-6">
+                    <input type="text" class="form-control" id="searchTerm"
+                           placeholder="Enter search term..." required>
+                </div>
+                <div class="col-md-4">
+                    <select class="form-select" id="searchType" required>
+                        <option value="">Select search type...</option>
+                        <option value="MobileNumber">Mobile Number</option>
+                        <option value="CustomerId">Customer ID</option>
+                        <option value="UniqueId">Unique ID</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-search"></i> Search
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Results List -->
+    <div class="list-group" id="fileList">
         @foreach (var item in Model)
         {
             @if (item.IsDirectory)
@@ -48,6 +78,9 @@
                         <div>
                             <i class="bi bi-folder"></i> @item.Name
                         </div>
+                        <small class="text-muted">
+                            Last Modified: @item.LastModified.ToLocalTime().ToString("g")
+                        </small>
                     </div>
                 </a>
             }
@@ -62,13 +95,34 @@
                              style="cursor: pointer;">
                             <i class="bi bi-file-text"></i> @item.Name
                         </div>
+                        <div class="text-muted">
+                            <small class="me-3">@((item.Size / 1024.0).ToString("N1")) KB</small>
+                            <small>Last Modified: @item.LastModified.ToLocalTime().ToString("g")</small>
+                        </div>
                     </div>
                 </div>
             }
         }
     </div>
 
-    <!-- Modal for file contents -->
+    <!-- Search Results Modal -->
+    <div class="modal fade" id="searchResultsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Search Results</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="searchError" class="alert alert-danger d-none"></div>
+                    <div id="searchResults" class="list-group">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Contents Modal -->
     <div class="modal fade" id="fileContentsModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -98,47 +152,116 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
+        // File content viewer
         document.querySelectorAll('.file-item').forEach(item => {
             item.addEventListener('click', async (e) => {
                 const element = e.currentTarget;
                 const serverId = element.dataset.serverId;
                 const rootName = element.dataset.root;
                 const path = element.dataset.path;
-                const fileName = element.querySelector('i').nextSibling.textContent.trim();
 
-                // Show modal with loading state
-                const modal = new bootstrap.Modal(document.getElementById('fileContentsModal'));
-                const fileContents = document.getElementById('fileContents');
-                const fileError = document.getElementById('fileError');
-                const fileInfo = document.getElementById('fileInfo');
-
-                fileContents.textContent = 'Loading...';
-                fileError.classList.add('d-none');
-                fileInfo.textContent = '';
-                modal.show();
-
-                try {
-                    const response = await fetch(
-                        `/LogViewer/FilePortal/GetFileContents?serverId=${encodeURIComponent(serverId)}&rootName=${encodeURIComponent(rootName)}&path=${encodeURIComponent(path)}`
-                    );
-                    const data = await response.json();
-
-                    if (data.success) {
-                        fileContents.textContent = data.contents;
-                        fileError.classList.add('d-none');
-                        fileInfo.textContent = `${formatFileSize(data.fileSizeBytes)} | ${data.encoding}`;
-                    } else {
-                        fileContents.textContent = '';
-                        fileError.textContent = data.message;
-                        fileError.classList.remove('d-none');
-                        fileInfo.textContent = data.fileSizeBytes ? formatFileSize(data.fileSizeBytes) : '';
-                    }
-                } catch (error) {
-                    fileContents.textContent = '';
-                    fileError.textContent = 'Error loading file contents';
-                    fileError.classList.remove('d-none');
-                }
+                showFileContents(serverId, rootName, path);
             });
         });
+
+        // Search form handler
+        document.getElementById('searchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const searchData = {
+                serverId: document.getElementById('serverId').value,
+                rootName: document.getElementById('rootName').value,
+                path: document.getElementById('currentPath').value,
+                searchTerm: document.getElementById('searchTerm').value,
+                searchType: document.getElementById('searchType').value
+            };
+
+            const searchResults = document.getElementById('searchResults');
+            const searchError = document.getElementById('searchError');
+
+            searchResults.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
+            searchError.classList.add('d-none');
+
+            const modal = new bootstrap.Modal(document.getElementById('searchResultsModal'));
+            modal.show();
+
+            try {
+                const response = await fetch(`/FilePortal/Search`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(searchData)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    if (data.results.length === 0) {
+                        searchResults.innerHTML = '<div class="text-center">No results found</div>';
+                        return;
+                    }
+
+                    searchResults.innerHTML = data.results.map(result => `
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <strong class="file-item"
+                                                onclick="showFileContents('${searchData.serverId}', '${searchData.rootName}', '${result.filePath}')"
+                                                style="cursor: pointer;">
+                                            <i class="bi bi-file-text"></i> ${result.fileName}
+                                        </strong>
+                                        <small class="text-muted">
+                                            Last Modified: ${new Date(result.lastModified).toLocaleString()}
+                                        </small>
+                                    </div>
+                                    <div>
+                                        <small class="text-muted">Line ${result.lineNumber}:</small>
+                                        <pre class="mb-0">${result.matchedContent}</pre>
+                                    </div>
+                                </div>
+                            `).join('');
+                } else {
+                    searchError.textContent = data.error;
+                    searchError.classList.remove('d-none');
+                }
+            } catch (error) {
+                searchError.textContent = 'Error performing search';
+                searchError.classList.remove('d-none');
+            }
+        });
+
+        async function showFileContents(serverId, rootName, path) {
+            const modal = new bootstrap.Modal(document.getElementById('fileContentsModal'));
+            const fileContents = document.getElementById('fileContents');
+            const fileError = document.getElementById('fileError');
+            const fileInfo = document.getElementById('fileInfo');
+
+            fileContents.textContent = 'Loading...';
+            fileError.classList.add('d-none');
+            fileInfo.textContent = '';
+            modal.show();
+
+            try {
+                const response = await fetch(
+                    `/FilePortal/GetFileContents?serverId=${encodeURIComponent(serverId)}&rootName=${encodeURIComponent(rootName)}&path=${encodeURIComponent(path)}`
+                );
+                const data = await response.json();
+
+                if (data.success) {
+                    fileContents.textContent = data.contents;
+                    fileError.classList.add('d-none');
+                    fileInfo.textContent = `${formatFileSize(data.fileSizeBytes)} | ${data.encoding}`;
+                } else {
+                    fileContents.textContent = '';
+                    fileError.textContent = data.message;
+                    fileError.classList.remove('d-none');
+                    fileInfo.textContent = data.fileSizeBytes ? formatFileSize(data.fileSizeBytes) : '';
+                }
+            } catch (error) {
+                fileContents.textContent = '';
+                fileError.textContent = 'Error loading file contents';
+                fileError.classList.remove('d-none');
+            }
+        }
     </script>
 }

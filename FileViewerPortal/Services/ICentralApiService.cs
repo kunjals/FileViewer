@@ -8,5 +8,6 @@ namespace FileViewerPortal.Services
         Task<FileServerResponse<IEnumerable<RootDirectory>>> GetRootDirectories(string serverId);
         Task<FileServerResponse<IEnumerable<FileItem>>> Browse(string serverId, string rootName, string path);
         Task<FileServerResponse<FileReadResult>> GetFileContents(string serverId, string rootName, string path);
+        Task<FileServerResponse<FileSearchResult>> SearchFiles(FileSearchRequest request);
     }
 }
