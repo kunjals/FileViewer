@@ -33,13 +33,12 @@ namespace CentralApi.Controllers
 
         [HttpPost]
         [AllowAnonymous]
+        [Route("login")]
         public async Task<ActionResult<AuthResponse>> Login(LoginReq request)
         {
             try
             {
                 var user = await _userManager.FindByNameAsync(request.Username);
-
-                UpdateUserDetails(user);
 
                 if (user == null)
                 {
@@ -104,33 +103,26 @@ namespace CentralApi.Controllers
             }
         }
 
-        private void UpdateUserDetails(ApplicationUser? user)
+        [HttpPost]
+        [Authorize]
+        [Route("logout")]
+        public async Task<IActionResult> Logout()
         {
-            user.FirstName = "Kunjal";
-            user.LastName = "Shah";
-            user.LastLoginAt = DateTime.UtcNow;
-
-            _userManager.UpdateAsync(user);
+            try
+            {
+                await _signInManager.SignOutAsync();
+                return Ok(new { Success = true });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during logout");
+                return StatusCode(500, new { Success = false, Error = "An error occurred during logout" });
+            }
         }
-
-        //[HttpPost]
-        //[Authorize]
-        //public async Task<IActionResult> Logout()
-        //{
-        //    try
-        //    {
-        //        await _signInManager.SignOutAsync();
-        //        return Ok(new { Success = true });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error during logout");
-        //        return StatusCode(500, new { Success = false, Error = "An error occurred during logout" });
-        //    }
-        //}
 
         [HttpGet]
         [Authorize]
+        [Route("me")]
         public async Task<ActionResult<UserInfo>> GetCurrentUser()
         {
             try

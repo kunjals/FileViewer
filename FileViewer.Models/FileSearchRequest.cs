@@ -12,6 +12,5 @@ namespace FileViewer.Models
         public string RootName { get; set; }
         public string Path { get; set; }
         public string SearchTerm { get; set; }
-        public SearchType SearchType { get; set; }
     }
 }

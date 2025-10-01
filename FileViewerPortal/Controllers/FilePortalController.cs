@@ -173,12 +173,67 @@ namespace FileViewerPortal.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Search([FromBody] FileSearchRequest request)
+        public async Task<IActionResult> Search()
         {
             try
             {
+                // Log the raw request for debugging
+                Request.EnableBuffering();
+                Request.Body.Position = 0;
+                using var reader = new StreamReader(Request.Body);
+                var rawBody = await reader.ReadToEndAsync();
+                Request.Body.Position = 0;
+                
+                _logger.LogInformation("Raw request body: {RawBody}", rawBody);
+                _logger.LogInformation("Content-Type: {ContentType}", Request.ContentType);
+                _logger.LogInformation("Request method: {Method}", Request.Method);
+
+                // Manually parse the JSON request
+                FileSearchRequest request = null;
+                try
+                {
+                    if (!string.IsNullOrEmpty(rawBody))
+                    {
+                        request = System.Text.Json.JsonSerializer.Deserialize<FileSearchRequest>(rawBody, new System.Text.Json.JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true,
+                            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to deserialize FileSearchRequest from JSON: {RawBody}", rawBody);
+                    return BadRequest(new { success = false, error = "Invalid JSON format" });
+                }
+
+                // Validate the request
+                if (request == null)
+                {
+                    _logger.LogWarning("FileSearchRequest is null after manual deserialization");
+                    return BadRequest(new { success = false, error = "Invalid search request - deserialization failed" });
+                }
+
+                if (string.IsNullOrWhiteSpace(request.ServerId))
+                {
+                    return BadRequest(new { success = false, error = "Server ID is required" });
+                }
+
+                if (string.IsNullOrWhiteSpace(request.SearchTerm))
+                {
+                    return BadRequest(new { success = false, error = "Search term is required" });
+                }
+
+                _logger.LogInformation("Search request: ServerId={ServerId}, SearchTerm={SearchTerm}", 
+                    request.ServerId, request.SearchTerm);
+
                 var response = await _centralApiService.SearchFiles(request);
-                return Ok(response);
+                return Ok(new
+                {
+                    success = response.Success,
+                    results = response.Results,
+                    error = response.Error
+                });
             }
             catch (Exception ex)
             {

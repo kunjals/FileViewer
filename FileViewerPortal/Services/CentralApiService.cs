@@ -54,10 +54,34 @@ namespace FileViewerPortal.Services
             return await GetFromApi<FileReadResult>(url);
         }
 
-        public async Task<FileServerResponse<FileSearchResult>> SearchFiles(FileSearchRequest request)
+        public async Task<FileSearchResponse> SearchFiles(FileSearchRequest request)
         {
-            return await GetFromApi<FileSearchResult>(
-                $"api/FileApi/{request.ServerId}/search", request);
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync($"api/FileApi/{request.ServerId}/search", request);
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadFromJsonAsync<FileSearchResponse>()
+                        ?? new FileSearchResponse { Success = false, Error = "No response from API" };
+                }
+                else
+                {
+                    return new FileSearchResponse
+                    {
+                        Success = false,
+                        Error = "Error communicating with central API"
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error accessing central API for search");
+                return new FileSearchResponse
+                {
+                    Success = false,
+                    Error = "Error communicating with central API"
+                };
+            }
         }
 
         private async Task<FileServerResponse<T>> GetFromApi<T>(string url)

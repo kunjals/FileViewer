@@ -45,19 +45,11 @@
                 <input type="hidden" id="rootName" value="@ViewBag.RootName" />
                 <input type="hidden" id="currentPath" value="@ViewBag.Path" />
 
-                <div class="col-md-6">
+                <div class="col-md-8">
                     <input type="text" class="form-control" id="searchTerm"
                            placeholder="Enter search term..." required>
                 </div>
                 <div class="col-md-4">
-                    <select class="form-select" id="searchType" required>
-                        <option value="">Select search type...</option>
-                        <option value="MobileNumber">Mobile Number</option>
-                        <option value="CustomerId">Customer ID</option>
-                        <option value="UniqueId">Unique ID</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
                     <button type="submit" class="btn btn-primary w-100">
                         <i class="bi bi-search"></i> Search
                     </button>
@@ -172,8 +164,7 @@
                 serverId: document.getElementById('serverId').value,
                 rootName: document.getElementById('rootName').value,
                 path: document.getElementById('currentPath').value,
-                searchTerm: document.getElementById('searchTerm').value,
-                searchType: document.getElementById('searchType').value
+                searchTerm: document.getElementById('searchTerm').value
             };
 
             const searchResults = document.getElementById('searchResults');
@@ -185,6 +176,8 @@
             const modal = new bootstrap.Modal(document.getElementById('searchResultsModal'));
             modal.show();
 
+            console.log(searchData);
+
             try {
                 const response = await fetch(`/FilePortal/Search`, {
                     method: 'POST',
@@ -193,7 +186,7 @@
                     },
                     body: JSON.stringify(searchData)
                 });
-
+                //console.log(response);
                 const data = await response.json();
 
                 if (data.success) {
@@ -203,23 +196,23 @@
                     }
 
                     searchResults.innerHTML = data.results.map(result => `
-                                <div class="list-group-item">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <strong class="file-item"
-                                                onclick="showFileContents('${searchData.serverId}', '${searchData.rootName}', '${result.filePath}')"
-                                                style="cursor: pointer;">
-                                            <i class="bi bi-file-text"></i> ${result.fileName}
-                                        </strong>
-                                        <small class="text-muted">
-                                            Last Modified: ${new Date(result.lastModified).toLocaleString()}
-                                        </small>
-                                    </div>
-                                    <div>
-                                        <small class="text-muted">Line ${result.lineNumber}:</small>
-                                        <pre class="mb-0">${result.matchedContent}</pre>
-                                    </div>
-                                </div>
-                            `).join('');
+                                        <div class="list-group-item">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <strong class="file-item"
+                                                        onclick="showFileContents('${searchData.serverId}', '${searchData.rootName}', '${result.filePath}')"
+                                                        style="cursor: pointer;">
+                                                    <i class="bi bi-file-text"></i> ${result.fileName}
+                                                </strong>
+                                                <small class="text-muted">
+                                                    Last Modified: ${new Date(result.lastModified).toLocaleString()}
+                                                </small>
+                                            </div>
+                                            <div>
+                                                <small class="text-muted">Line ${result.lineNumber}:</small>
+                                                <pre class="mb-0">${result.matchedContent}</pre>
+                                            </div>
+                                        </div>
+                                    `).join('');
                 } else {
                     searchError.textContent = data.error;
                     searchError.classList.remove('d-none');
@@ -263,5 +256,6 @@
                 fileError.classList.remove('d-none');
             }
         }
+
     </script>
 }

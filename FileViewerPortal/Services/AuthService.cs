@@ -25,7 +25,7 @@ namespace FileViewerPortal.Services
         {
             try
             {
-                var response = await _httpClient.PostAsJsonAsync("/api/authentication", new LoginReq
+                var response = await _httpClient.PostAsJsonAsync("/api/authentication/login", new LoginReq
                 {
                     Username = username,
                     Password = password

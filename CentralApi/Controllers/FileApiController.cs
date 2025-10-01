@@ -95,7 +95,7 @@ namespace CentralApi.Controllers
         {
             try
             {
-                var result = _serverManager.SearchFiles(request);
+                var result = await _serverManager.SearchFiles(request);
                 return Ok(result);
             }
             catch (Exception ex)

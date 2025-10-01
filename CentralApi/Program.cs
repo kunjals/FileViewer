@@ -125,25 +125,25 @@ namespace CentralApi
             builder.Services.AddScoped<IFileServerManager, FileServerManager>();
 
             // Configure rate limiting
-            builder.Services.AddRateLimiter(options =>
-            {
-                options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-                    RateLimitPartition.GetFixedWindowLimiter(
-                        partitionKey: httpContext.User.Identity?.Name ?? httpContext.Request.Headers.Host.ToString(),
-                        factory: partition => new FixedWindowRateLimiterOptions
-                        {
-                            AutoReplenishment = true,
-                            PermitLimit = 1000,
-                            QueueLimit = 0,
-                            Window = TimeSpan.FromMinutes(1)
-                        }));
-            });
+            //builder.Services.AddRateLimiter(options =>
+            //{
+            //    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+            //        RateLimitPartition.GetFixedWindowLimiter(
+            //            partitionKey: httpContext.User.Identity?.Name ?? httpContext.Request.Headers.Host.ToString(),
+            //            factory: partition => new FixedWindowRateLimiterOptions
+            //            {
+            //                AutoReplenishment = true,
+            //                PermitLimit = 100000,
+            //                QueueLimit = 0,
+            //                Window = TimeSpan.FromMinutes(1)
+            //            }));
+            //});
 
             // Configure compression
-            builder.Services.AddResponseCompression(options =>
-            {
-                options.EnableForHttps = true;
-            });
+            //builder.Services.AddResponseCompression(options =>
+            //{
+            //    options.EnableForHttps = true;
+            //});
 
             var app = builder.Build();
 
@@ -200,7 +200,7 @@ namespace CentralApi
             });
 
             //app.UseHttpsRedirection();
-            app.UseResponseCompression();
+            //app.UseResponseCompression();
             //app.UseRateLimiter();
             //app.UseCors("AllowPortal");
             app.MapIdentityApi<ApplicationUser>();

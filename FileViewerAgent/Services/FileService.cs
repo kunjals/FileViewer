@@ -67,7 +67,9 @@ namespace FileViewerAgent.Services
                     Name = dirInfo.Name,
                     Path = ConvertToWebPath(Path.GetRelativePath(rootPath, dir)),
                     IsDirectory = true,
-                    RootName = rootName
+                    RootName = rootName,
+                    LastModified = dirInfo.LastWriteTime,
+                    Size = 0 // Directories don't have a meaningful size
                 });
             }
 
@@ -77,12 +79,15 @@ namespace FileViewerAgent.Services
                 var extension = Path.GetExtension(file).ToLower();
                 if (_allowedExtensions.Contains(extension))
                 {
+                    var fileInfo = new FileInfo(file);
                     items.Add(new FileItem
                     {
                         Name = Path.GetFileName(file),
                         Path = ConvertToWebPath(Path.GetRelativePath(rootPath, file)),
                         IsDirectory = false,
-                        RootName = rootName
+                        RootName = rootName,
+                        LastModified = fileInfo.LastWriteTime,
+                        Size = fileInfo.Length
                     });
                 }
             }
@@ -171,7 +176,7 @@ namespace FileViewerAgent.Services
                 }
 
                 var searchResults = new ConcurrentBag<FileSearchResult>();
-                var searchPattern = GetSearchPattern(request.SearchType, request.SearchTerm);
+                var searchPattern = new Regex(Regex.Escape(request.SearchTerm), RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
                 // Get all matching files
                 var files = Directory.GetFiles(searchPath, "*.*", SearchOption.AllDirectories)
@@ -290,19 +295,6 @@ namespace FileViewerAgent.Services
             }
 
             return null;
-        }
-
-        private Regex GetSearchPattern(SearchType searchType, string searchTerm)
-        {
-            var pattern = searchType switch
-            {
-                SearchType.MobileNumber => FormatMobileNumberPattern(searchTerm),
-                SearchType.CustomerId => Regex.Escape(searchTerm),
-                SearchType.UniqueId => Regex.Escape(searchTerm),
-                _ => throw new ArgumentException($"Invalid search type: {searchType}")
-            };
-
-            return new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
         }
 
         private string FormatMobileNumberPattern(string mobileNumber)
